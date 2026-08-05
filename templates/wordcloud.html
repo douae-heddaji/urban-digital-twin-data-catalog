@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nuage de mots-clés par thématique — Catalogue de données</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=13" />
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">IRIT · Jumeau numérique urbain</p>
+    <div class="hero-row">
+      <div>
+        <h1>Nuage de mots-clés par thématique</h1>
+        <p class="subtitle">Explore les mots-clés regroupés par thématique. Sélectionne plusieurs mots puis confirme pour filtrer le catalogue.</p>
+      </div>
+      <div class="stats">
+        <div><strong id="totalWords">0</strong><span>mots</span></div>
+        <div><strong id="selectedWordsCount">0</strong><span>sélectionnés</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="cloud-page">
+    <section class="keyword-panel cloud-panel">
+      <div class="section-title">
+        <div>
+          <h2>Mots disponibles par thématique</h2>
+          <p>Les mots sont organisés par thématique. Leur taille dépend du nombre de datasets associés dans chaque thématique.</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0">
+          <a href="{{ url_for('wordcloud_visual') }}" class="back-catalogue-btn" style="background:#16a34a;border-color:#16a34a;color:#fff"><span aria-hidden="true">☁</span><strong>Vue nuage visuel</strong></a>
+          <a href="{{ url_for('index') }}" class="back-catalogue-btn"><span aria-hidden="true">←</span><strong>Retour au catalogue</strong></a>
+        </div>
+      </div>
+
+      <div class="top-search-row cloud-toolbar">
+        <input id="cloudSearch" type="search" placeholder="Chercher dans le nuage : vélo, eau, station..." />
+        <div class="select-menu">
+          <button id="cloudSortBtn" class="select-trigger" type="button">Tri : Taille <span>▾</span></button>
+          <div id="cloudSortMenu" class="select-popover hidden">
+            <button data-cloudsort="az">A-Z</button>
+            <button data-cloudsort="za">Z-A</button>
+            <button data-cloudsort="size">Taille : nombre de datasets</button>
+            <button data-cloudsort="modified">Last modified</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="selectedCloudBar" class="selected-keywords hidden">
+        <div>
+          <strong>Mots sélectionnés</strong>
+          <span>Ces mots seront appliqués comme filtre dans la page principale.</span>
+        </div>
+        <div id="selectedCloudChips" class="selected-chips"></div>
+      </div>
+
+      <div id="cloudWords" class="word-cloud"></div>
+
+      <div class="cloud-actions">
+        <button id="resetCloudBtn" class="ghost" type="button">Réinitialiser</button>
+        <button id="confirmCloudBtn" class="open-btn" type="button">Confirmer la sélection</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/sample-data.js') }}?v=13"></script>
+  <script src="{{ url_for('static', filename='js/wordcloud.js') }}?v=13"></script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carte multi-datasets</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/carte_api.css') }}?v=14" />
+</head>
+<body>
+  <div id="mapLoading" class="loading-overlay" role="status" aria-live="polite" aria-label="Chargement de la visualisation en cours">
+    <div class="loading-widget">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <h2 id="mapLoadingTitle">Préparation de la visualisation</h2>
+      <p id="mapLoadingMessage">Les données géographiques sont en cours de téléchargement et d’affichage sur la carte.</p>
+      <span id="mapLoadingDetail">Merci de patienter, le temps de chargement dépend de la taille des datasets.</span>
+    </div>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar">
+      <a class="back-link" href="/">← Retour au catalogue</a>
+      <h1>Croisement cartographique</h1>
+      <p class="subtitle">Les jeux sélectionnés sont chargés comme des couches indépendantes et superposés sur une même carte.</p>
+
+      <div class="card">
+        <h2>Datasets sélectionnés</h2>
+        <div id="selectedDatasetsList" class="selected-datasets-list"></div>
+        <p class="small">Décoche une couche pour la masquer temporairement sans la supprimer.</p>
+      </div>
+
+      <div class="card analysis-card">
+        <h2>Analyse spatiale intelligente</h2>
+        <label for="viewModeInput">Mode d’affichage
+          <select id="viewModeInput">
+            <option value="all">Toutes les données superposées</option>
+            <option value="automatic">Uniquement le résultat du croisement automatique</option>
+          </select>
+        </label>
+        <div id="analysisControls" class="hidden">
+          <label for="analysisDatasetA">Dataset A
+            <select id="analysisDatasetA"></select>
+          </label>
+          <label for="analysisDatasetB">Dataset B
+            <select id="analysisDatasetB"></select>
+          </label>
+          <label for="analysisDistance">Distance maximale pour les croisements par proximité
+            <div class="distance-row">
+              <input id="analysisDistance" type="number" min="1" max="100000" step="10" value="100" />
+              <span>mètres</span>
+            </div>
+          </label>
+          <button id="runAnalysisBtn" type="button">Analyser Dataset A et Dataset B</button>
+          <div class="spatial-divider"><span>ou</span></div>
+          <button id="runMultiAnalysisBtn" type="button">Analyser toutes les couches cochées</button>
+          <p class="small">Pour l’analyse multiple, coche au moins deux couches dans la liste « Datasets sélectionnés ». Toutes les paires entre les couches cochées sont analysées : A↔B, A↔C, B↔C, etc.</p>
+          <button id="restoreAllBtn" class="secondary-btn" type="button">Revenir à toutes les données</button>
+          <p class="small">L’application détecte les géométries et utilise la distance indiquée pour déterminer les zones et objets communs.</p>
+        </div>
+        <div id="analysisResult" class="analysis-result hidden" aria-live="polite"></div>
+      </div>
+
+      <div id="temporalControls" class="card controls-card hidden">
+        <h2>Paramètres temporels</h2>
+        <p class="small">Sans date : toutes les données s'affichent. Avec une date sans heure : toutes les lignes de ce jour (ou dont la période inclut cette date). Avec une heure précise : la donnée exacte, ou la plus proche à défaut.</p>
+        <div class="control-grid">
+          <label>Date<input id="dateInput" type="date" /></label>
+          <label>Heure<input id="hourInput" type="time" step="60" inputmode="numeric" /></label>
+        </div>
+        <label id="metricLine">Type de comptage affiché
+          <select id="metricInput">
+            <option value="all">Tous</option><option value="pedestrian_count">Piétons</option>
+            <option value="bike_count">Vélos</option><option value="car_count">Voitures</option>
+            <option value="heavy_vehicle_count">Poids lourds</option>
+          </select>
+        </label>
+        <button id="latestCommonBtn" type="button" class="secondary-btn">📅 Dernière période commune</button>
+        <button id="reloadBtn" type="button">Actualiser toutes les couches</button>
+        <p id="temporalFeedback" class="small" aria-live="polite"></p>
+      </div>
+
+      <div id="periodControls" class="card controls-card hidden">
+        <h2>Période de validité</h2>
+        <p class="small">Ce dataset décrit des périodes (date de début / date de fin), pas un instant précis.</p>
+        <div class="control-grid">
+          <label class="radio-line"><input type="radio" name="periodMode" id="periodModeAll" value="all" checked> Afficher tout</label>
+          <label class="radio-line"><input type="radio" name="periodMode" id="periodModeRange" value="range"> Fixer une période</label>
+        </div>
+        <div id="periodRangeInputs" class="control-grid hidden">
+          <label>Date début<input id="periodStartInput" type="date" /></label>
+          <label>Date fin<input id="periodEndInput" type="date" /></label>
+        </div>
+        <button id="periodReloadBtn" type="button">Actualiser toutes les couches</button>
+        <p id="periodFeedback" class="small" aria-live="polite"></p>
+      </div>
+
+      <div class="card status-card"><h2>État du chargement</h2><p id="status">Préparation de la carte...</p></div>
+
+      <div class="card">
+        <h2>Statistiques</h2>
+        <p><strong>Couches chargées :</strong> <span id="loadedLayerCount">0</span></p>
+        <p><strong>Objets affichés :</strong> <span id="featureCount">0</span></p>
+        <div id="datasetStats" class="dataset-stats"></div>
+      </div>
+
+      <div class="card legend-card">
+        <h2>Légende des couches</h2>
+        <div id="datasetLegend"></div>
+      </div>
+    </aside>
+    <main class="map-container"><div id="map"></div>
+      <section class="below-map-panels">
+        <div class="card">
+          <h2>Export</h2>
+          <p class="small">Exporte les données telles qu'affichées actuellement sur la carte (après tes filtres de zone, date ou période). Un fichier séparé est téléchargé par dataset chargé, dans le format d'origine déclaré pour chaque source (CSV, GPKG, Shapefile, KML...).</p>
+          <button id="exportDataBtn" type="button">📤 Exporter les données affichées</button>
+          <p id="exportStatus" class="small" aria-live="polite"></p>
+        </div>
+
+        <div class="card spatial-filter-card">
+          <h2>Limiter la zone affichée</h2>
+          <label for="namedZoneInput">Rechercher une commune, un quartier ou une adresse</label>
+          <div class="named-zone-search">
+            <input id="namedZoneInput" type="search" placeholder="Ex. Blagnac, Ramonville-Saint-Agne…" autocomplete="off" />
+            <button id="searchNamedZoneBtn" type="button">Rechercher</button>
+          </div>
+          <div id="namedZoneResultsWrap" class="hidden">
+            <label for="namedZoneResults">Résultat proposé</label>
+            <select id="namedZoneResults"></select>
+            <button id="applyNamedZoneBtn" type="button">Limiter toutes les couches à cette zone</button>
+          </div>
+          <div class="spatial-divider"><span>ou</span></div>
+          <button id="applyMapBoundsBtn" type="button">Limiter à la zone visible</button>
+          <button id="resetSpatialFilterBtn" class="secondary-btn" type="button" disabled>Réinitialiser la zone</button>
+          <p id="spatialFilterStatus" class="small spatial-filter-status">Aucune limite spatiale appliquée.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/carte_multi.js') }}?v=29"></script>
+</body>
+</html>

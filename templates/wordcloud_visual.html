@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nuage de mots — Vue visuelle</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=13" />
+  <style>
+    .visual-cloud-page { padding: 28px 48px 40px; }
+    .visual-cloud-panel {
+      background: #fff;
+      border: 1px solid #d9e1ef;
+      box-shadow: 0 18px 45px rgba(24,34,53,.08);
+      border-radius: 24px;
+      padding: 28px 32px 32px;
+    }
+    .visual-panel-head {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 20px; margin-bottom: 18px;
+    }
+    .visual-panel-head h2 { margin: 0; font-size: 34px; letter-spacing: -.02em; color: #182235; }
+    .visual-panel-head p  { margin: 6px 0 0; color: #667085; font-size: 16px; max-width: 680px; }
+
+    /* legend */
+    .legend-bar {
+      display: flex; flex-wrap: wrap; gap: 10px 22px;
+      margin-bottom: 18px; padding: 12px 18px;
+      background: #f8fafc; border: 1px solid #e4ecf7; border-radius: 14px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #182235; }
+    .legend-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    /* cloud canvas */
+    .cloud-canvas-wrap {
+      position: relative; width: 100%; background: #fff;
+      border: 1px solid #e4ecf7; border-radius: 20px; overflow: hidden;
+      min-height: 560px;
+    }
+    #cloudSvg { display: block; width: 100%; }
+    #cloudFallback { display:none; min-height:560px; padding:18px 24px; align-content:center; text-align:center; line-height:.88; }
+    #cloudFallback .wc-fallback-word { display:inline-block; margin:0 5px 2px 0; font-family:Arial, sans-serif; font-weight:800; cursor:pointer; vertical-align:middle; white-space:nowrap; }
+
+    /* loading state */
+    .cloud-loading {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; min-height: 560px; color: #667085;
+    }
+    .cloud-loading p { margin: 0; font-size: 15px; font-weight: 600; }
+    .cloud-spinner {
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 4px solid #e4ecf7; border-top-color: #0b2b66;
+      animation: cloud-spin .8s linear infinite;
+    }
+    @keyframes cloud-spin { to { transform: rotate(360deg); } }
+    .cloud-canvas-wrap.is-loading #cloudSvg,
+    .cloud-canvas-wrap.is-loading #cloudFallback { display: none !important; }
+    .cloud-canvas-wrap:not(.is-loading) .cloud-loading { display: none; }
+
+    /* word style */
+    .wc-word {
+      cursor: pointer;
+      transition: opacity .15s, filter .15s;
+      font-family: Arial, sans-serif;
+      font-weight: 800;
+    }
+    .wc-word:hover { opacity: .72; }
+    .wc-word.sel   { text-decoration: underline; text-decoration-thickness: 2px; filter: brightness(.75); }
+
+    /* actions */
+    .visual-cloud-actions {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 20px; gap: 14px; flex-wrap: wrap;
+    }
+    .sel-bar   { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; }
+    .sel-label { font-weight: 700; color: #182235; font-size: 14px; white-space: nowrap; }
+    .sel-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .sel-chip  {
+      background: #0b2b66; color: #fff; border: none; border-radius: 999px;
+      padding: 6px 12px; font-size: 13px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    .sel-chip:hover { background: #1a3d88; }
+    .action-btns { display: flex; gap: 12px; }
+    .action-btns button { width: auto; min-width: 130px; }
+    .action-btns .open-btn { margin-top: 0; }
+
+    /* tooltip */
+    #wcTip {
+      position: fixed; display: none; background: #182235; color: #fff;
+      font-size: 13px; font-weight: 700; padding: 6px 12px;
+      border-radius: 10px; pointer-events: none; z-index: 999; white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      .visual-cloud-page { padding: 20px; }
+      .visual-panel-head h2 { font-size: 26px; }
+      .visual-cloud-actions { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <p class="eyebrow">IRIT · Jumeau numérique urbain</p>
+  <div class="hero-row">
+    <div>
+      <h1>Nuage de mots-clés</h1>
+      <p class="subtitle">Vue visuelle — les mots les plus fréquents sont au centre et plus grands. Clique pour sélectionner.</p>
+    </div>
+    <div class="stats">
+      <div><strong id="totalWords">0</strong><span>mots</span></div>
+      <div><strong id="selectedCount">0</strong><span>sélectionnés</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="visual-cloud-page">
+  <section class="visual-cloud-panel">
+
+    <div class="visual-panel-head">
+      <div>
+        <h2>Nuage de mots-clés</h2>
+        <p>Les mots les plus fréquents dans les datasets apparaissent en plus grand au centre.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0">
+        <a href="{{ url_for('wordcloud') }}" class="back-catalogue-btn">
+          <span aria-hidden="true">←</span><strong>Vue par thématique</strong>
+        </a>
+        <a href="{{ url_for('index') }}" class="back-catalogue-btn">
+          <span aria-hidden="true">↩</span><strong>Retour au catalogue</strong>
+        </a>
+      </div>
+    </div>
+
+    <div class="legend-bar">
+      <div class="legend-item"><div class="legend-dot" style="background:#9b1c1c"></div>Très fréquent</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>Fréquent</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e57373"></div>Moyen</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2c3e50"></div>Moins fréquent</div>
+    </div>
+
+    <div class="cloud-canvas-wrap is-loading" id="cloudWrap">
+      <div id="cloudLoading" class="cloud-loading">
+        <div class="cloud-spinner" aria-hidden="true"></div>
+        <p>Chargement des mots-clés…</p>
+      </div>
+      <svg id="cloudSvg"></svg>
+      <div id="cloudFallback" aria-label="Nuage de mots-clés"></div>
+    </div>
+
+    <div class="visual-cloud-actions">
+      <div class="sel-bar">
+        <span class="sel-label" id="selLabel" style="display:none">Sélectionnés :</span>
+        <div class="sel-chips" id="selChips"></div>
+      </div>
+      <div class="action-btns">
+        <button class="ghost" id="resetBtn" type="button">Réinitialiser</button>
+        <button class="open-btn" id="confirmBtn" type="button">Confirmer →</button>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<div id="wcTip"></div>
+
+<!-- d3 core + d3-cloud layout -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.7/d3.layout.cloud.min.js"></script>
+<script src="{{ url_for('static', filename='js/sample-data.js') }}?v=13"></script>
+<script>
+/* ================================================================
+   CONFIG
+================================================================ */
+const MAX_WORDS = 55;
+
+/* ================================================================
+   CONTRÔLE DE L'ALÉATOIRE DU NUAGE
+   d3-cloud utilise Math.random() en interne pour 3 choses : la position
+   de départ en X, en Y, et le sens de la spirale de placement pour
+   chaque mot. C'est CETTE randomisation interne (pas la rotation, déjà
+   fixée à 0) qui fait que la forme du nuage change à chaque
+   affichage/redimension.
+
+   Deux modes possibles :
+   - "fixed"  : générateur "seedé" (toujours la même graine) -> le nuage
+                est identique au pixel près à chaque rendu.
+   - "narrow" : les valeurs aléatoires sont tirées dans une toute petite
+                fourchette (ex: 0.60 à 0.64) au lieu de [0, 1] -> le
+                nuage reste très proche d'un rendu à l'autre, avec une
+                infime variation naturelle, sans être figé à 100%.
+                Attention : la fourchette ne doit PAS chevaucher 0.5,
+                sinon le sens de la spirale peut basculer d'un côté à
+                l'autre et la forme change alors beaucoup plus.
+================================================================ */
+const CLOUD_RANDOM_MODE = "fixed";    // "fixed" ou "narrow"
+const CLOUD_SEED = 42;                // utilisé si mode = "fixed" (change le nombre -> autre forme figée)
+const CLOUD_NARROW_BASE = 0.62;       // utilisé si mode = "narrow" (doit être loin de 0.5)
+const CLOUD_NARROW_SPREAD = 0.04;     // utilisé si mode = "narrow" (largeur de la fourchette, ex: 0.60-0.64)
+
+function makeSeededRandom(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeNarrowRandom(base, spread) {
+  return function () {
+    return base - spread / 2 + Math.random() * spread;
+  };
+}
+function getCloudRandomFn() {
+  return CLOUD_RANDOM_MODE === "narrow"
+    ? makeNarrowRandom(CLOUD_NARROW_BASE, CLOUD_NARROW_SPREAD)
+    : makeSeededRandom(CLOUD_SEED);
+}
+
+/* ================================================================
+   PALETTE — 4 niveaux selon la fréquence relative
+================================================================ */
+function pickColor(count, max) {
+  const r = count / max;
+  if (r >= 0.70) return "#9b1c1c";   // très fréquent — rouge très foncé
+  if (r >= 0.40) return "#c0392b";   // fréquent     — rouge foncé
+  if (r >= 0.18) return "#e57373";   // moyen        — rouge clair
+  return "#2c3e50";                   // moins fréquent — gris bleu
+}
+
+/* ================================================================
+   HELPERS
+================================================================ */
+function stripAccents(v) {
+  return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function toArray(v) {
+  return Array.isArray(v) ? v : String(v || "").split(/[;,]/).map(x => x.trim()).filter(Boolean);
+}
+function isForbiddenCloudTerm(term) {
+  const k = stripAccents(String(term || "").toLowerCase())
+    .replace(/[’']/g, " ")
+    .replace(/[^a-z0-9_ -]+/g, " ")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  // Supprime définitivement toutes les variantes :
+  // non_classe, non_classé, Non classé, Non renseigné, etc.
+  if (k === "david") return true;
+  if (k === "non" || k.startsWith("non_")) return true;
+  if (k === "non_classe" || k.startsWith("non_classe_") || /^non_?classe/.test(k)) return true;
+  if (k === "non_renseigne" || k.startsWith("non_renseigne_") || /^non_?renseigne/.test(k)) return true;
+
+  // Supprime les expressions de fréquence de mise à jour :
+  // MAJ, MAJ hebdomadaire, Minutes (MAJ chaque quart d'heure), etc.
+  if (k === "maj" || k.startsWith("maj_") || k.includes("_maj_") || k.endsWith("_maj")) return true;
+
+  return false;
+}
+const STOPWORDS = new Set(["a","à","afin","au","avec","ce","ces","dans","de","des","du","elle","en","est","et","il","je","la","le","les","leur","mais","ne","ou","par","pas","pour","que","qui","sa","se","si","son","sur","un","une","non","classe","classé","classee","non_classe","non_classé","non_classee","referentiel","référentiel","bd_topo","bd","topo","ign","ignf","osm","openstreetmap","donnée","données","jeu","dataset","fichier","format","source","url","api","csv","json","geojson","zip","xlsx","pdf","xml","open","data","toulouse","metropole","métropole","opendata","id","nom","type","valeur","champ","table","code","lien","jumeau","numérique","urbain","dd","mm","yy","yyyy","hh","heure","minute","minutes","chaque","hebdomadaire","mensuelle","mensuel","libelle","libellé","renseigne","renseigné","maj","att","dep","quart","pop_h","pop_f","basso","cambo","meteopole","météopole","grand","grands","grande","grandes","salade","david","test","exemple","divers","inconnu","inconnue","inconnus","null","nul","na","n_a","sans_objet","autre","autres","renseignement","renseignements","libelle","libellé","libelles","libellés","identifiant","identifiants","description","descriptions","periode","période","periodes","périodes","frequence","fréquence","frequences","fréquences","periodicite","périodicité","quotidien","quotidienne","quotidiennes","mensuelles","annuel","annuelle","annuelles","minutes","minute","heures","heure","quart_heure","quart_d_heure","15_minutes","quinze_minutes","departement","département","dep","arrondissement","objectid","fid","gid","uuid","shape","shape_area","shape_length","lat","lon","long","x","y","coord","coordonnees","coordonnées","ylat","xlong","longituden","altitude","no","lib_voie","street_name","street","name","commune","communes","code_postal","postal","insee","code_insee","act1564","actocc1564","agriculteur","agriculteurs","appart","production","www","http","https","fr","com","org","net","gouv","explore","sort"]);
+
+// La normalisation du nuage retire les accents avant le contrôle. On construit
+// donc une version normalisée de la liste afin que « données »/« donnee »,
+// « avec », « et », « www », etc. soient réellement exclus dans tous les cas.
+const NORMALIZED_STOPWORDS = new Set(
+  [...STOPWORDS].map(value => stripAccents(String(value).toLowerCase())
+    .replace(/[’']/g, "_")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, ""))
+);
+
+function isCloudStopword(value) {
+  const key = stripAccents(String(value || "").toLowerCase())
+    .replace(/[’']/g, "_")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  return !key || NORMALIZED_STOPWORDS.has(key);
+}
+const TECHNICAL_PATTERNS = [
+  /^david$/i,
+  /^(dd|mm|yy|yyyy|hh|mn|ss)([_-](dd|mm|yy|yyyy|hh|mn|ss))*$/i,
+  /^d[_-]?heure$/i,
+  /^d[_-]?minute/i,
+  /^dd[_-]?mm[_-]?yy/i,
+  /^mm[_-]?dd[_-]?yy/i,
+  /^.*[_-]?maj([_-].*)?$/i,
+  /^non[_-]?renseigne(e|es|s)?$/i,
+  /^type[_-]?de[_-]?station$/i,
+  /^code[_-]?insee$/i,
+  /^act\w*1564$/i,
+  /^actocc\w*1564$/i,
+  /^appart$/i,
+  /^agriculteurs?$/i,
+  /^salade$/i,
+  /^\d+$/i,
+  /^\d+[_ -]?(minute|minutes|heure|heures)$/i,
+  /^(minute|minutes|heure|heures)$/i,
+  /^(quotidien|quotidienne|hebdomadaire|mensuel|mensuelle|annuel|annuelle|periodicite|périodicité|frequence|fréquence)$/i,
+  /^(libelle|libellé|identifiant|identifiants|description|periode|période|renseignement|renseignements)$/i,
+  /^(objectid|fid|gid|uuid|shape|shape_area|shape_length)$/i,
+  /^(lat|lon|long|x|y|coord|coordonnees|coordonnées|ylat|xlong|altitude)$/i,
+  /^(no|lib_voie|street|street_name|name)$/i,
+  /^(test|exemple|divers|inconnu|inconnue|null|na|n_a|sans_objet|autre|autres)$/i
+];
+const EXACT_MAP = {"transport":"Transport","mobilite":"Mobilité","mobilité":"Mobilité","mobilite_douce":"Mobilité douce","mobilité_douce":"Mobilité douce","localisation":"Localisation","geolocalisation":"Géolocalisation","géolocalisation":"Géolocalisation","geopoint":"GeoPoint","geo_point":"GeoPoint","geopoint_2d":"GeoPoint","geoshape":"GeoShape","geo_shape":"GeoShape","station_meteo":"station_meteo","station_météo":"station_meteo","basso_cambo":"Basso Cambo","espace_public":"Espace public","espaces_publics":"Espace public","iris":"IRIS","velotoulouse":"VélôToulouse","velôtoulouse":"VélôToulouse","batiment":"Bâtiment","bâtiment":"Bâtiment","environnement":"Environnement","population":"Population","infrastructure":"Infrastructure","velo":"Vélo","vélo":"Vélo","energie":"Énergie","énergie":"Énergie","electricite":"Électricité","temperature":"Température","température":"Température","precipitation":"Précipitation","précipitation":"Précipitation","deplacement":"Déplacement","déplacement":"Déplacement","arret":"Arrêt","arrêt":"Arrêt","pieton":"Piéton","piéton":"Piéton","chomage":"Chômage","chômage":"Chômage","logement":"Logement","menage":"Ménage","ménage":"Ménage","education":"Éducation","diplome":"Diplôme","diplôme":"Diplôme","frequence":"Fréquence","fréquence":"Fréquence","meteo":"Météo","météo":"Météo","demographie":"Démographie","recensement":"Recensement"};
+
+
+
+
+// État du nuage visuel
+let selected = [];
+let allWords = [];
+const PINNED_GROUP_LABELS = ["Localisation", "Météo", "Quartier", "Mobilité douce", "Espace public", "Éducation"];
+
+function normalizeTagValueForCloud(value) {
+  let original = String(value || "").trim().toLowerCase();
+  if (!original) return "";
+  original = original
+    .replace(/[’']/g, "_")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  const key = stripAccents(original);
+  if (!key || isForbiddenCloudTerm(key) || isCloudStopword(key)) return "";
+
+  const aliases = {
+    meteo: "météo", meteos: "météo",
+    station_meteo: "station_meteo",
+    mobilite_douce: "mobilité_douce", mobilites_douces: "mobilité_douce",
+    velo: "vélo", velos: "vélo",
+    pieton: "piéton", pietons: "piéton",
+    arret: "arrêt", arrets: "arrêt",
+    temperature: "température", temperatures: "température",
+    precipitation: "précipitation", precipitations: "précipitation",
+    batiment: "bâtiment", batiments: "bâtiment",
+    deplacements: "déplacement", logements: "logement",
+    quartiers: "quartier", communes: "commune",
+    espaces_verts: "espace_vert",
+    geopoint: "GeoPoint", geo_point: "GeoPoint", geopoint_2d: "GeoPoint",
+    geoshape: "GeoShape", geo_shape: "GeoShape",
+    grand_quartier: "grands_quartiers", grands_quartier: "grands_quartiers",
+    grands_quartiers: "grands_quartiers"
+  };
+  if (aliases[key]) return aliases[key];
+
+  const rawParts = key.split("_").filter(Boolean);
+  // Un terme composé uniquement de mots vides/techniques ne doit jamais être
+  // réintroduit dans le nuage après normalisation.
+  if (rawParts.length && rawParts.every(isCloudStopword)) return "";
+  const parts = rawParts.map(part => {
+    if (aliases[part]) return aliases[part];
+    if (part.length > 4 && part.endsWith("aux")) return part.slice(0, -3) + "al";
+    if (part.length > 4 && part.endsWith("eaux")) return part.slice(0, -1);
+    if (part.length > 4 && part.endsWith("s") && !part.endsWith("ss")) return part.slice(0, -1);
+    return part;
+  });
+  return parts.join("_");
+}
+
+function normalizeTagsForCloud(values) {
+  return [...new Set(toArray(values).map(normalizeTagValueForCloud).filter(Boolean))];
+}
+
+function displayCloudTag(value) {
+  const normalized = normalizeTagValueForCloud(value);
+  if (!normalized) return "";
+  if (normalized === "GeoPoint" || normalized === "GeoShape") return normalized;
+  const key = stripAccents(normalized.toLowerCase());
+  if (EXACT_MAP[normalized]) return EXACT_MAP[normalized];
+  if (EXACT_MAP[key]) return EXACT_MAP[key];
+  return normalized
+    .split("_")
+    .map((part, index) => index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join("_");
+}
+
+function expandSelectionForCatalog(values) {
+  // Le mot parent est remplacé par ses membres réels pour le catalogue.
+  // Exemple : Localisation -> localisation, GeoPoint, GeoShape.
+  const expanded = [];
+  const add = value => {
+    const normalized = normalizeTagValueForCloud(value);
+    if (normalized && !expanded.includes(normalized)) expanded.push(normalized);
+  };
+  (Array.isArray(values) ? values : []).forEach(value => {
+    const key = normalizeGroupKey(value);
+    const group = KEYWORD_GROUPS.find(item => normalizeGroupKey(item.label) === key);
+    if (group) {
+      // On garde seulement les trois formes canoniques utiles dans le catalogue.
+      const canonicalMembers = group.label === "Localisation"
+        ? ["localisation", "GeoPoint", "GeoShape"]
+        : [...group.memberKeys];
+      canonicalMembers.forEach(add);
+    } else {
+      add(value);
+    }
+  });
+  return expanded;
+}
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzHJJUeJXdHcTOiDyAtBnZ1eQsyR4IgWpbW2mFK_9Vv7WtG9_tStrYhCRQ2reJy9hlMYA/exec";
+const GOOGLE_SHEET_ID = "1hlZBcHTi2NvcqdmKnrUqhuyJnW_ls0TUOxNPkHEl6dc";
+let cloudDatasets = Array.isArray(window.SAMPLE_DATASETS) ? window.SAMPLE_DATASETS : [];
+
+async function loadCloudDatasets(){
+  if(!APPS_SCRIPT_URL) return;
+  try{
+    const response = await fetch(APPS_SCRIPT_URL + `?sheetId=${encodeURIComponent(GOOGLE_SHEET_ID)}&t=${Date.now()}`);
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const rows = Array.isArray(data) ? data : (data.datasets || []);
+    if(Array.isArray(rows) && rows.length) cloudDatasets = rows;
+    console.info(`${cloudDatasets.length} datasets chargés pour le nuage visuel.`);
+  }catch(error){
+    console.error("Impossible de charger Google Sheet pour le nuage visuel. Données locales utilisées.", error);
+  }
+}
+
+function normalizeTheme(v) {
+  const r = stripAccents(String(v || "").toLowerCase()).trim();
+  if (r.includes("transport"))    return "Transport";
+  if (r.includes("environnement"))return "Environnement";
+  if (r.includes("population"))   return "Population";
+  if (r.includes("espace"))       return "Espaces publics";
+  if (r.includes("batiment") || r.includes("bâtiment")) return "Bâtiment";
+  if (r.includes("technologie"))  return "Technologie";
+  return "Autres";
+}
+
+function normalizeGroupKey(value) {
+  return stripAccents(String(value || "").toLowerCase())
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+const KEYWORD_GROUPS = [
+  { label: "Localisation", members: ["localisation", "geopoint", "geo_point", "geopoint_2d", "geoshape", "geo_shape"] },
+  { label: "Météo", members: ["meteo", "météo", "station_meteo", "station_météo"] },
+  { label: "Mobilité douce", members: ["mobilite_douce", "mobilité_douce", "velo", "vélo", "velotoulouse", "velôtoulouse"] },
+  { label: "Quartier", members: ["quartier", "quartiers", "grand_quartier", "grands_quartiers", "iris", "avenue", "rue", "boulevard", "place", "impasse", "chemin", "secteur", "secteurs"] },
+  { label: "Éducation", members: ["education", "éducation", "ecole", "école", "ecoles", "écoles", "scolaire", "scolaires", "diplome", "diplôme", "diplomes", "diplômes", "maternelle", "maternelles", "etablissement", "établissement", "etablissements", "établissements"] },
+  { label: "Espace public", members: ["espace_public", "espaces_publics", "espace public", "espaces publics"] }
+].map(group => ({
+  label: group.label,
+  memberKeys: new Set(group.members.map(normalizeGroupKey))
+}));
+
+function applyKeywordGroups(termsSet) {
+  KEYWORD_GROUPS.forEach(group => {
+    const hasGroupMember = [...termsSet].some(term => group.memberKeys.has(normalizeGroupKey(term)));
+    if (!hasGroupMember) return;
+    [...termsSet].forEach(term => {
+      if (group.memberKeys.has(normalizeGroupKey(term))) termsSet.delete(term);
+    });
+    termsSet.add(group.label);
+  });
+}
+
+function addKnownCompositeTermsFromText(text, addDisplayTerm) {
+  const normalizedText = stripAccents(String(text || "").toLowerCase())
+    .replace(/[’']/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Expressions métier qui ne doivent pas être découpées en mots séparés.
+  if (/\bbasso\s+cambo\b/.test(normalizedText)) addDisplayTerm("basso_cambo");
+  if (/\bespaces?\s+publics?\b/.test(normalizedText)) addDisplayTerm("espace_public");
+  if (/\bgrands?\s+quartiers?\b/.test(normalizedText)) addDisplayTerm("grands_quartiers");
+}
+
+/* ================================================================
+   BUILD WORD FREQUENCY MAP
+================================================================ */
+
+
+/* ================================================================
+   MOTEUR DE MOTS-CLÉS IDENTIQUE AU CATALOGUE
+   Le nuage visuel et le catalogue utilisent strictement la même
+   normalisation et les mêmes champs recherchables.
+================================================================ */
+function normalizeTagValue(value){
+  let original = String(value || "").trim().toLowerCase();
+  if(!original) return "";
+
+  // Nettoyage commun : espaces et apostrophes deviennent des underscores.
+  original = original.replace(/\s+/g, "_");
+  original = original.replace(/[’']/g, "_");
+  original = original.replace(/_+/g, "_").replace(/^_|_$/g, "");
+
+  // Les valeurs techniques de fallback ne sont pas de vrais mots-clés.
+  // Avant, "non_classe" pouvait être compté dans la liste des mots-clés,
+  // mais il était ensuite rejeté par le filtre du nuage de mots : résultat 0 dataset affiché.
+  // On le supprime donc dès la normalisation des tags.
+  if(["non_classe", "non_classé", "non_classe", "non_classée", "non_renseigne", "non_renseigné", "non_renseignée"].includes(original)) return "";
+
+  // Clé sans accents pour reconnaître les variantes : météo/méteo/meteo, mobilité/mobilite, etc.
+  let key = stripAccents(original);
+  if(["non_classe", "non_classe", "non_classee", "non_renseigne", "non_renseignee"].includes(key)) return "";
+
+  const exact = {
+    // variantes / fautes / accents
+    "meteo": "météo",
+    "meteos": "météo",
+    "mobilite_douce": "mobilité_douce",
+    "mobilites_douces": "mobilité_douce",
+    "transport": "transport",
+    "transports": "transport",
+    "tranport": "transport",
+    "tranports": "transport",
+    "velo": "vélo",
+    "velos": "vélo",
+    "pieton": "piéton",
+    "pietons": "piéton",
+    "arret": "arrêt",
+    "arrets": "arrêt",
+    "itineraire": "itinéraire",
+    "itineraires": "itinéraire",
+    "temperature": "température",
+    "temperatures": "température",
+    "precipitation": "précipitation",
+    "precipitations": "précipitation",
+    "batiment": "bâtiment",
+    "batiments": "bâtiment",
+    "donnee": "donnée",
+    "donnees": "donnée",
+    "capacite": "capacité",
+    "capacites": "capacité",
+    "equipement": "équipement",
+    "equipements": "équipement",
+    "electricite": "électricité",
+    "electrique": "électrique",
+
+    // singulier simple
+    "voiries": "voirie",
+    "stations": "station",
+    "lignes": "ligne",
+    "taxis": "taxi",
+    "deplacements": "déplacement",
+    "logements": "logement",
+    "services": "service",
+    "parkings": "parking",
+    "quartiers": "quartier",
+    "communes": "commune",
+    "routes": "route",
+    "rues": "rue",
+    "arbres": "arbre",
+    "espaces_verts": "espace_vert",
+    "risques": "risque",
+    "inondations": "inondation",
+    "interventions": "intervention",
+    "comptages": "comptage"
+  };
+  if(exact[key]) return exact[key];
+
+  const parts = key.split("_").map(part => {
+    if(exact[part]) return exact[part];
+    if(part.length > 4 && part.endsWith("aux")) return part.slice(0, -3) + "al";
+    if(part.length > 4 && part.endsWith("eaux")) return part.slice(0, -1);
+    if(part.length > 4 && part.endsWith("s") && !part.endsWith("ss")) return part.slice(0, -1);
+    return part;
+  });
+
+  const joined = parts.join("_");
+  return exact[joined] || joined;
+}
+
+function normalizeTags(values){
+  return [...new Set(toArray(values).map(normalizeTagValue).filter(Boolean))];
+}
+
+
+const CLOUD_SHORT_KEEP = new Set(["eau","air","bus","lac","sol","rue","gaz"]);
+const CLOUD_PROTECTED_TERMS = new Set(["GeoPoint","GeoShape","code_insee","code_postal","grands_quartiers","pech_david","basso_cambo","mobilité_douce"]);
+const CLOUD_DOMAIN_TERMS = new Set([
+  "transport","mobilité","mobilité_douce","déplacement","circulation","trafic","comptage","piéton","vélo","cycle","cyclable","bus","tram","métro","tisséo","itinéraire","ligne","arrêt","station","taxi","voiture","parking","stationnement","route","rue","voie","voirie","borne","recharge","électrique",
+  "environnement","météo","climat","température","humidité","précipitation","pluie","vent","pression","air","eau","énergie","électricité","bruit","pollution","ozone","particule","arbre","jardin","parc","espace_vert","nature","risque","inondation","déchet","serre",
+  "population","recensement","logement","ménage","famille","emploi","chômage","inactivité","activité","éducation","diplôme","revenu","santé","âge","sexe","habitant","naissance","décès","immigration",
+  "bâtiment","infrastructure","équipement","commerce","service","adresse","commune","quartier","iris","territoire","localisation","géolocalisation","géométrie","GeoPoint","GeoShape","code_insee","code_postal","longitude","latitude",
+  "archive","grand_quartier","grands_quartiers","pech_david","basso_cambo","aire","public","publique","secteur","postal"
+]);
+const CLOUD_STOPWORDS = new Set([
+  "a","à","afin","ai","ainsi","alors","au","aucun","aucune","aussi","autre","aux","avec","avoir","ce","ces","cet","cette","chez","comme","comment","dans","de","des","du","elle","elles","en","encore","entre","est","et","etre","être","eux","fait","faire","il","ils","je","la","le","les","leur","leurs","lors","mais","mes","mon","ne","nos","notre","nous","ou","où","par","pas","peu","plus","pour","qu","que","quel","quelle","qui","sa","sans","se","ses","si","son","sont","sur","ta","tes","ton","tous","tout","toute","toutes","tu","un","une","vos","votre","vous",
+  "non","renseigné","renseigne","donnée","données","donnee","donnees","jeu","jeux","dataset","datasets","fichier","fichiers","format","formats","source","sources","url","api","csv","json","geojson","zip","xlsx","xls","pdf","xml","parquet","gpkg","shp","kml","html","http","https","www","com","fr","open","data","toulouse","metropole","métropole","opendata",
+  "alimenter","jumeau","classe","classé","non_classe","non_classé","att","attribut","attributs","quart","code","frd","grd","dma","python","life","no2","id","nom","type","valeur","valeurs","champ","champs","colonne","colonnes","table","tables","fiche","base","projet","urbain","numerique","numérique","lien","liens","partir","peut","telecharge","téléchargé","telecharger","télécharger","telechargement","téléchargement","sot","annees","heure","heures","minute","minutes","jour","jours","mois","don","dont","utilise","utilisé","utiliser","permet","permettre","doit","voir","liée","lie","liés","liées","lié",
+  "meteopole","météopole","latitude","lat","longitude","lon","long","meme","même","mons","pty","basemap","jawg","activite_copie","activitecopie","copie","jory","juin","janvier","fevrier","février","mars","avril","mai","juillet","aout","août","septembre","octobre","novembre","decembre","décembre","salade","david","soupetard","nakache","labo","test"
+]);
+const CLOUD_EXACT_MAP = {
+  "chom1564":"chômage", "chomage":"chômage", "chomages":"chômage", "chomeur":"chômage", "chomeurs":"chômage",
+  "inactive1564":"inactivité", "inactive":"inactivité", "inactives":"inactivité", "inactif":"inactivité", "inactifs":"inactivité", "inactivite":"inactivité",
+  "pop1564":"population", "population1564":"population", "p20_pop":"population", "pop":"population",
+  "nb_logt":"logement", "logt":"logement", "logts":"logement", "logement":"logement", "logements":"logement",
+  "menage":"ménage", "menages":"ménage", "ménages":"ménage",
+  "emploi1564":"emploi", "actif1564":"emploi", "actifs":"emploi",
+  "temp":"température", "temperature":"température", "temperatures":"température", "temp_moy":"température", "tempmin":"température", "tempmax":"température",
+  "humidite":"humidité", "humidité":"humidité", "hum":"humidité",
+  "precip":"précipitation", "precipitation":"précipitation", "precipitations":"précipitation", "pluie":"précipitation",
+  "pression_mer":"pression", "pressionmer":"pression",
+  "energie":"énergie", "energies":"énergie", "electricite":"électricité", "electricites":"électricité", "electrique":"électrique", "electriques":"électrique",
+  "annee":"année", "annees":"année",
+  "transport":"transport", "transports":"transport", "tranport":"transport", "tranports":"transport",
+  "mobilite":"mobilité", "mobilites":"mobilité", "mobilite_douce":"mobilité_douce", "mobilites_douces":"mobilité_douce",
+  "activite":"activité", "activites":"activité", "activité":"activité", "activités":"activité",
+  "adresse":"adresse", "adresses":"adresse",
+  "diplome":"diplôme", "diplomes":"diplôme", "diplômes":"diplôme",
+  "education":"éducation", "educations":"éducation",
+  "famille":"famille", "familles":"famille",
+  "pieton":"piéton", "pietons":"piéton", "piétons":"piéton",
+  "velo":"vélo", "velos":"vélo", "vélo":"vélo", "vélos":"vélo",
+  "arret":"arrêt", "arrets":"arrêt", "arrêts":"arrêt",
+  "itineraire":"itinéraire", "itineraires":"itinéraire", "itinéraires":"itinéraire",
+  "stationnement":"stationnement", "parkings":"parking", "voitures":"voiture", "voiries":"voirie", "lignes":"ligne", "stations":"station", "routes":"route", "rues":"rue", "arbres":"arbre", "communes":"commune", "quartiers":"quartier",
+  "localisation":"localisation", "geopoint":"GeoPoint", "geo_point":"GeoPoint", "geopoint_2d":"GeoPoint", "geoshape":"GeoShape", "geo_shape":"GeoShape", "code_insee":"code_insee", "code_postal":"code_postal",
+  "archive":"archive", "archives":"archive", "archivage":"archive",
+  "recensement_population":"recensement", "recensement":"recensement",
+  "grands_quartiers":"grands_quartiers", "grand_quartier":"grands_quartiers", "grands_quartier":"grands_quartiers",
+  "pech_david":"pech_david", "basso_cambo":"basso_cambo"
+};
+const CLOUD_DROP_PATTERNS = [
+  /^\d+$/, /^\d{1,4}[a-z]*$/, /^(dd|mm|yy|yyyy|hh|mn|ss)$/,
+  /^(dd[-_]mm[-_]yy|mm[-_]dd[-_]yy|yyyy[-_]mm[-_]dd|dd[-_]mm[-_]yy[-_]hh[-_]mm)$/,
+  /^id[-_]?.*/, /^num[-_]?.*/, /^lib[-_]?.*/, /^cod[-_]?.*/, /^code$/, /^field\d*$/, /^x_?.*/, /^y_?.*/,
+  /^grd$/, /^sot$/, /^d$/, /^l$/, /^no\d+$/, /^\d{5,}$/
+];
+function prepareCloudText(value){
+  return stripAccents(String(value || "").toLowerCase())
+    .replace(/[’']/g, " ")
+    .replace(/\bnon[\s_-]+classe\b/g, " ")
+    .replace(/\bd[\s_-]+(eau|energie|annee|air|adresse|humidite|electricite)\b/g, "$1")
+    .replace(/\bl[\s_-]+(eau|energie|annee|air|adresse|humidite|electricite)\b/g, "$1")
+    .replace(/\bsot[\s_-]+annee\b/g, "annee")
+    .replace(/\bd[\s_-]+heure\b/g, " ")
+    .replace(/\bd[\s_-]+minute\b/g, " ")
+    .replace(/\bgrd[\s_-]+quart\b/g, " ")
+    .replace(/\bgrands?[\s_-]+quartiers?\b/g, " grands_quartiers ")
+    .replace(/\bpech[\s_-]+david\b/g, " pech_david ")
+    .replace(/\bbasso[\s_-]+cambo\b/g, " basso_cambo ")
+    .replace(/\bchom[\s_-]*1564\b/g, " chômage ")
+    .replace(/\binactive[\s_-]*1564\b/g, " inactivité ")
+    .replace(/\bpop[\s_-]*1564\b/g, " population ")
+    .replace(/\bp20[\s_-]*pop\b/g, " population ")
+    .replace(/\bnb[\s_-]*logt\b/g, " logement ")
+    .replace(/\btemp[\s_-]*moy\b/g, " température ")
+    .replace(/\bgeo[\s_-]*point\b/g, " GeoPoint ")
+    .replace(/\bgeo[\s_-]*shape\b/g, " GeoShape ")
+    .replace(/\bcode[\s_-]*insee\b/g, " code_insee ")
+    .replace(/\bcode[\s_-]*postal\b/g, " code_postal ");
+}
+function singularizeCloudTerm(term){
+  if(CLOUD_PROTECTED_TERMS.has(term)) return term;
+  const lower = stripAccents(String(term).toLowerCase());
+  if(CLOUD_EXACT_MAP[lower]) return CLOUD_EXACT_MAP[lower];
+  if(term.length > 4 && lower.endsWith("aux")) return term.slice(0, -3) + "al";
+  if(term.length > 4 && lower.endsWith("eaux")) return term.slice(0, -1);
+  if(term.length > 4 && lower.endsWith("s") && !lower.endsWith("ss")) return term.slice(0, -1);
+  return term;
+}
+function isCloudDomainTerm(term){
+  const lower = stripAccents(String(term || "").toLowerCase());
+  return CLOUD_DOMAIN_TERMS.has(term) || CLOUD_DOMAIN_TERMS.has(lower) || CLOUD_PROTECTED_TERMS.has(term);
+}
+function normalizeCloudTerm(value){
+  let raw = String(value || "").trim();
+  if(!raw) return "";
+  let key0 = stripAccents(raw.toLowerCase())
+    .replace(/[’']/g, " ")
+    .replace(/-+/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  if(/^recensement_population(_?\d{4})?$/.test(key0)) return "recensement";
+  if(/^archives?(_?\d{4})?$/.test(key0) || /^archive/.test(key0)) return "archive";
+  if(key0 === "meteopole" || key0 === "metropole") return "";
+  if(key0 === "activite_copie" || key0 === "activitecopie") return "";
+  if(key0.startsWith("non_classe") || /^non_?classe/.test(key0)) return "";
+  if(/^chom(age)?_?\d+/.test(key0) || /^chom\d+/.test(key0)) return "chômage";
+  if(/^inactive?_?\d+/.test(key0)) return "inactivité";
+  if(/^(pop|population)_?\d+/.test(key0) || /^p\d+_pop$/.test(key0)) return "population";
+  if(/^(nb_)?logt/.test(key0)) return "logement";
+
+  let term = prepareCloudText(raw)
+    .replace(/[^a-z0-9_éèêëàâäîïôöùûüç-]+/gi, " ")
+    .trim();
+  if(!term) return "";
+  term = term.replace(/-+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  let lookup = stripAccents(term.toLowerCase());
+  term = CLOUD_EXACT_MAP[lookup] || CLOUD_EXACT_MAP[term] || term;
+  term = singularizeCloudTerm(term);
+  const lower = stripAccents(String(term).toLowerCase());
+  if(CLOUD_STOPWORDS.has(lower) || CLOUD_STOPWORDS.has(term)) return "";
+  if(CLOUD_DROP_PATTERNS.some(rx => rx.test(lower))) return "";
+  if(lower.length < 3 && !CLOUD_SHORT_KEEP.has(lower)) return "";
+  if(String(term).length > 40) return "";
+  return term;
+}
+function cloudTextPartsFromAttributes(attrs){
+  const parts = [];
+  if(!attrs) return parts;
+  if(Array.isArray(attrs)) return attrs;
+  if(typeof attrs === "object"){
+    Object.entries(attrs).forEach(([k,v]) => {
+      parts.push(k);
+      if(Array.isArray(v)) parts.push(...v);
+      else parts.push(String(v || ""));
+    });
+    return parts;
+  }
+  return [String(attrs || "")];
+}
+function extractCloudTermsFromText(text, source="text"){
+  const prepared = prepareCloudText(text);
+  const terms = [];
+  const protectedExpr = ["grands_quartiers", "pech_david", "basso_cambo", "mobilite_douce", "code_insee", "code_postal"];
+  protectedExpr.forEach(expr => {
+    if(prepared.includes(expr)){
+      const term = normalizeCloudTerm(expr);
+      if(term) terms.push(term);
+    }
+  });
+  prepared
+    .replace(/grands_quartiers|pech_david|basso_cambo|mobilite_douce|code_insee|code_postal/g, " ")
+    .split(/[\s,;:()\[\]{}\/\\|+._]+/)
+    .forEach(token => {
+      const term = normalizeCloudTerm(token);
+      if(!term) return;
+      if(source === "attributes" && !isCloudDomainTerm(term)) return;
+      if((source === "description" || source === "metadata") && !isCloudDomainTerm(term)) return;
+      terms.push(term);
+    });
+  return [...new Set(terms)];
+}
+function extractCloudTermsFromDataset(d){
+  const groups = [
+    {source:"title", values:[d.title || d.nom || d.name]},
+    {source:"tag", values:toArray(d.tags)},
+    {source:"description", values:[d.description, d.commentaires || d.commentaire]},
+    {source:"metadata", values:[d.theme, d.geometry || d.geometrie || d.geolocalisation || d.geoLocalisation, d.frequence, d.granularite || d.granulariteTemporelle]},
+    {source:"attributes", values:cloudTextPartsFromAttributes(d.attributs)}
+  ];
+  const terms = new Set();
+  groups.forEach(group => group.values.filter(Boolean).forEach(value => extractCloudTermsFromText(value, group.source).forEach(t => terms.add(t))));
+  return [...terms];
+}
+
+function searchableGroupTermsForDataset(dataset) {
+  // Reproduit exactement normalizeDataset() + exactCloudTermsForDataset()
+  // de la page principale du catalogue.
+  const normalizedDataset = {
+    title: dataset.title || dataset.nom || dataset.name || "Sans titre",
+    theme: dataset.theme || dataset.thematique || dataset.category || "Non classé",
+    geometry: dataset.geometry || dataset.geometrie || dataset.geolocalisation || dataset.geoLocalisation || "",
+    frequence: dataset.frequence || "",
+    granularite: dataset.granularite || dataset.granulariteTemporelle || "",
+    tags: normalizeTags(dataset.tags),
+    description: dataset.description || dataset.commentaires || dataset.commentaire || dataset.url || "",
+    commentaires: dataset.commentaires || dataset.commentaire || "",
+    attributs: dataset.attributs || {}
+  };
+
+  normalizedDataset.cloudTerms = extractCloudTermsFromDataset(normalizedDataset);
+
+  return new Set(
+    [...normalizedDataset.tags, ...normalizedDataset.cloudTerms]
+      .map(normalizeTagValue)
+      .filter(Boolean)
+  );
+}
+
+function buildWordMap() {
+  /*
+    MOTEUR DE COMPTAGE
+    - seule la colonne tags est utilisée ;
+    - les tags sont normalisés exactement comme dans le catalogue ;
+    - un dataset compte au maximum une fois pour chaque mot individuel ;
+    - pour un mot parent, le compteur est la SOMME des compteurs de ses membres.
+      Exemple : Localisation = localisation + GeoPoint + GeoShape.
+  */
+  const datasets = cloudDatasets || [];
+  const searchableByDataset = datasets.map(searchableGroupTermsForDataset);
+  const map = {};
+
+  // SOURCE UNIQUE DE COMPTAGE : on utilise les mêmes champs recherchables
+  // que le catalogue (tags, titre, description, métadonnées et attributs).
+  // Chaque mot compte au maximum une fois par dataset grâce au Set.
+  // Ainsi, si « centre » correspond à 4 datasets dans le catalogue,
+  // il apparaît également avec 4 occurrences dans le nuage visuel.
+  searchableByDataset.forEach(terms => {
+    terms.forEach(term => {
+      const display = displayCloudTag(term);
+      if (!display || isForbiddenCloudTerm(display)) return;
+      map[display] = (map[display] || 0) + 1;
+    });
+  });
+
+  KEYWORD_GROUPS.forEach(group => {
+    // UNION réelle calculée directement sur chaque dataset brut. Cette méthode
+    // ne dépend pas des différences de casse/canonicalisation entre GeoPoint,
+    // GeoShape et les termes simples du catalogue.
+    const count = datasets.reduce((total, dataset) => {
+      const haystack = `_${stripAccents(JSON.stringify(dataset || {}).toLowerCase())
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/_+/g, "_")}_`;
+      const matches = [...group.memberKeys].some(memberKey => {
+        const key = normalizeGroupKey(memberKey);
+        return key && haystack.includes(`_${key}_`);
+      });
+      return total + (matches ? 1 : 0);
+    }, 0);
+
+    // Les membres sont remplacés visuellement par le mot parent,
+    // mais restent disponibles individuellement dans le catalogue.
+    [...group.memberKeys].forEach(member => {
+      const display = displayCloudTag(member);
+      if (display !== group.label) delete map[display];
+    });
+    if (count > 0) map[group.label] = count;
+  });
+
+  return map;
+}
+function render() {
+  const wrap = document.getElementById("cloudWrap");
+  const W = wrap.clientWidth || 900;
+  const H = Math.max(520, Math.round(W * 0.58));
+
+  const map = buildWordMap();
+  Object.keys(map).forEach(key => {
+    if (normalizeGroupKey(key) === "david" || isForbiddenCloudTerm(key) || TECHNICAL_PATTERNS.some(rx => rx.test(normalizeGroupKey(key)))) delete map[key];
+  });
+
+  const sortedEntries = Object.entries(map)
+    .filter(([term, count]) => term && count > 0 && !isForbiddenCloudTerm(term))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  let entries = sortedEntries.slice(0, MAX_WORDS);
+
+  // Les sous-ensembles restent visibles même si leur fréquence est plus faible
+  // que celle des mots-clés classiques du Top N.
+  PINNED_GROUP_LABELS.forEach(label => {
+    const item = sortedEntries.find(([term]) => term === label);
+    if (!item || entries.some(([term]) => term === label)) return;
+    if (entries.length >= MAX_WORDS) entries.pop();
+    entries.push(item);
+  });
+
+  entries = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  const maxCount = entries[0]?.[1] || 1;
+  const minCount = entries[entries.length - 1]?.[1] || 1;
+
+  const sizeScale = window.d3 && d3.scaleLog ? d3.scaleLog()
+    .domain([Math.max(1, minCount), Math.max(1, maxCount)])
+    .range([13, 68])
+    .clamp(true) : null;
+
+  const fallbackSize = (count) => {
+    if (maxCount === minCount) return 32;
+    const ratio = (Math.log(count + 1) - Math.log(minCount + 1)) / (Math.log(maxCount + 1) - Math.log(minCount + 1));
+    return 13 + ratio * 55;
+  };
+
+  allWords = entries.map(([text, count]) => ({
+    text,
+    count,
+    size: sizeScale ? sizeScale(count) : fallbackSize(count),
+    color: pickColor(count, maxCount),
+  }));
+
+  document.getElementById("totalWords").textContent = allWords.length;
+
+  const svgEl = document.getElementById("cloudSvg");
+  const fallback = document.getElementById("cloudFallback");
+
+  // Sécurité : si d3 ou d3-cloud ne se charge pas depuis le CDN,
+  // on affiche quand même un nuage HTML compact au lieu d'une zone vide.
+  if (!window.d3 || !d3.layout || !d3.layout.cloud) {
+    svgEl.style.display = "none";
+    fallback.style.display = "block";
+    fallback.innerHTML = allWords.map(w => `
+      <span class="wc-fallback-word${selected.includes(w.text) ? " sel" : ""}"
+            data-word="${String(w.text).replace(/"/g, '&quot;')}"
+            title="${w.text} — ${w.count} occurrence${w.count > 1 ? "s" : ""}"
+            style="font-size:${w.size}px;color:${selected.includes(w.text) ? "#0b2b66" : w.color}">${w.text}</span>
+    `).join("");
+    fallback.querySelectorAll("[data-word]").forEach(el => {
+      el.addEventListener("click", () => {
+        const word = el.dataset.word;
+        if (selected.includes(word)) selected = selected.filter(w => w !== word);
+        else selected.push(word);
+        try { localStorage.setItem("selectedCloudKeywords", JSON.stringify(selected)); } catch(e) {}
+        render();
+      });
+    });
+    renderSelBar();
+    return;
+  }
+
+  fallback.style.display = "none";
+  svgEl.style.display = "block";
+
+  const svg = d3.select("#cloudSvg")
+    .attr("width", W)
+    .attr("height", H)
+    .attr("viewBox", `0 0 ${W} ${H}`);
+  svg.selectAll("*").remove();
+
+  d3.layout.cloud()
+    .size([W, H])
+    .words(allWords.map(w => ({ ...w })))
+    .padding(2)
+    .rotate(() => 0)
+    .random(getCloudRandomFn()) // contrôle la forme du nuage (voir CONFIG en haut du script)
+    .font("Arial")
+    .fontWeight("800")
+    .fontSize(d => d.size)
+    .spiral("archimedean")
+    .on("end", draw)
+    .start();
+
+  function draw(cloudWords) {
+    const g = svg.append("g")
+      .attr("transform", `translate(${W / 2},${H / 2})`);
+
+    g.selectAll("text")
+      .data(cloudWords)
+      .enter().append("text")
+        .attr("class", d => "wc-word" + (selected.includes(d.text) ? " sel" : ""))
+        .style("font-size", d => d.size + "px")
+        .style("font-family", "Arial, sans-serif")
+        .style("font-weight", "800")
+        .style("fill", d => selected.includes(d.text) ? "#0b2b66" : d.color)
+        .attr("text-anchor", "middle")
+        .attr("transform", d => `translate(${d.x},${d.y})rotate(${d.rotate})`)
+        .text(d => d.text)
+        .on("click", function(event, d) {
+          if (selected.includes(d.text)) selected = selected.filter(w => w !== d.text);
+          else selected.push(d.text);
+          try { localStorage.setItem("selectedCloudKeywords", JSON.stringify(selected)); } catch(e) {}
+          render();
+        })
+        .on("mouseenter", function(event, d) {
+          const tip = document.getElementById("wcTip");
+          tip.textContent = `${d.text} — ${d.count} occurrence${d.count > 1 ? "s" : ""}`;
+          tip.style.display = "block";
+        })
+        .on("mousemove", function(event) {
+          const tip = document.getElementById("wcTip");
+          tip.style.left = (event.clientX + 14) + "px";
+          tip.style.top  = (event.clientY - 30) + "px";
+        })
+        .on("mouseleave", function() {
+          document.getElementById("wcTip").style.display = "none";
+        });
+
+    renderSelBar();
+  }
+}
+function renderSelBar() {
+  document.getElementById("selectedCount").textContent = selected.length;
+  const label = document.getElementById("selLabel");
+  const chips = document.getElementById("selChips");
+  label.style.display = selected.length ? "" : "none";
+  chips.innerHTML = selected.map(w =>
+    `<button class="sel-chip" data-r="${w}">${w} <span style="opacity:.7">×</span></button>`
+  ).join("");
+  chips.querySelectorAll("[data-r]").forEach(btn => btn.onclick = () => {
+    selected = selected.filter(w => w !== btn.dataset.r);
+    try { localStorage.setItem("selectedCloudKeywords", JSON.stringify(selected)); } catch(e) {}
+    render();
+  });
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+document.getElementById("resetBtn").onclick = () => {
+  selected = [];
+  try { localStorage.removeItem("selectedCloudKeywords"); } catch(e) {}
+  render();
+};
+document.getElementById("confirmBtn").onclick = () => {
+  try { localStorage.setItem("selectedCloudKeywords", JSON.stringify(expandSelectionForCatalog(selected))); } catch(e) {}
+  window.location.href = "/index.html";
+};
+
+try { selected = expandSelectionForCatalog(JSON.parse(localStorage.getItem("selectedCloudKeywords") || "[]")); } catch(e) { selected = []; }
+
+// Re-render on resize
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(render, 250);
+});
+
+async function initCloudVisual(){
+  await loadCloudDatasets();
+  render();
+  const wrap = document.getElementById("cloudWrap");
+  if (wrap) wrap.classList.remove("is-loading");
+}
+initCloudVisual();
+</script>
+</body>
+</html>

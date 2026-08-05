@@ -1,0 +1,14 @@
+Flask>=3.0.0
+openpyxl>=3.1.0
+requests>=2.31.0
+# Planificateur intégré pour la capture périodique de l'historique des
+# datasets dynamiques (remplace le Planificateur de tâches Windows externe).
+APScheduler>=3.10.0
+# Nécessaire pour lire automatiquement les GeoPackage et Shapefiles de data.gouv.fr,
+# et pour exporter les données dans le format d'origine (GPKG, SHP, KML, CSV, XLSX, Parquet).
+geopandas>=1.0.0
+# Conversion des géométries WKT/EWKT et reprojection vers EPSG:4326.
+shapely>=2.0.0
+pyproj>=3.6.0
+# Nécessaire pour l'export au format Parquet.
+pyarrow>=14.0.0

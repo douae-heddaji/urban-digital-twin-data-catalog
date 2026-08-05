@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catalogue de données — Jumeau numérique urbain</title>
+  <link rel="stylesheet" href="style.css?v=5" />
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">IRIT · Jumeau numérique urbain</p>
+    <div class="hero-row">
+      <div>
+        <h1>Catalogue de données</h1>
+        <p class="subtitle">Rechercher, trier et filtrer les jeux de données utilisés pour le jumeau numérique de Toulouse.</p>
+      </div>
+      <div class="stats">
+        <div><strong id="totalDatasets">0</strong><span>datasets</span></div>
+        <div><strong id="visibleDatasets">0</strong><span>affichés</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section class="keyword-panel">
+    <div class="section-title">
+      <div>
+        <h2>Mots-clés</h2>
+        <p>La liste n’apparaît que lorsque tu ouvres le bloc, pour garder l’interface propre.</p>
+      </div>
+      <div class="keyword-actions"><a class="keyword-cloud-cta" href="wordcloud.html"><span class="cta-icon" aria-hidden="true">⌕</span><span>Explorer les mots-clés</span></a><a class="keyword-cloud-cta" href="wordcloud_visual.html" style="background:#16a34a;border-color:#16a34a;color:#fff"><span class="cta-icon" aria-hidden="true">☁</span><span>Nuage visuel</span></a><button id="clearKeywordBtn" class="ghost clear-keyword-btn">Effacer</button></div>
+    </div>
+
+    <div class="top-search-row">
+      <input id="keywordSearch" type="search" placeholder="Chercher un mot-clé : transport, météo, nature..." />
+      <div class="select-menu">
+        <button id="keywordSortBtn" class="select-trigger" type="button">Tri : A-Z <span>▾</span></button>
+        <div id="keywordSortMenu" class="select-popover hidden">
+          <button data-keysort="az">A-Z</button>
+          <button data-keysort="za">Z-A</button>
+          <button data-keysort="size">Taille : nombre de datasets</button>
+          <button data-keysort="modified">Last modified</button>
+        </div>
+      </div>
+      <button id="keywordToggle" class="outline-btn" type="button">Afficher les mots-clés <span>▾</span></button>
+    </div>
+
+    <div id="selectedKeywordBar" class="selected-keywords hidden">
+      <div>
+        <strong>Mots-clés sélectionnés</strong>
+        <span>Les datasets affichés correspondent à au moins un mot-clé sélectionné. L’intersection ET apparaît dans un bloc séparé.</span>
+      </div>
+      <div id="selectedKeywordChips" class="selected-chips"></div>
+    </div>
+
+    <div id="keywordDrawer" class="drawer hidden">
+      <div class="drawer-head">
+        <strong>Choisir un ou plusieurs mots-clés</strong>
+        <span id="keywordCount"></span>
+      </div>
+      <div id="keywordList" class="chips"></div>
+    </div>
+  </section>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <h2>Filtres</h2>
+
+      <div class="filter-block open">
+        <button class="accordion" type="button">Recherche globale <span>⌃</span></button>
+        <div class="accordion-content">
+          <input id="searchInput" type="search" placeholder="Titre, source, format..." />
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <button class="accordion" type="button">Tags <span>⌄</span></button>
+        <div class="accordion-content hidden">
+          <div class="side-search-row">
+            <input id="tagSearch" type="search" placeholder="Chercher un tag..." />
+            <div class="select-menu small">
+              <button id="tagSortBtn" class="select-trigger" type="button">A-Z <span>▾</span></button>
+              <div id="tagSortMenu" class="select-popover hidden">
+                <button data-tagsort="az">A-Z</button>
+                <button data-tagsort="za">Z-A</button>
+                <button data-tagsort="size">Nombre de datasets</button>
+              </div>
+            </div>
+          </div>
+          <div id="tagList" class="check-list"></div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <button class="accordion" type="button">Geo <span>⌄</span></button>
+        <div id="geoList" class="accordion-content check-list compact hidden"></div>
+      </div>
+
+      <div class="filter-block">
+        <button class="accordion" type="button">Temps <span>⌄</span></button>
+        <div id="timeList" class="accordion-content check-list time-list hidden"></div>
+      </div>
+
+      <div class="filter-block">
+        <button class="accordion" type="button">Publisher <span>⌄</span></button>
+        <div id="publisherList" class="accordion-content check-list compact hidden"></div>
+      </div>
+
+      <div class="filter-block">
+        <button class="accordion" type="button">Nature et format <span>⌄</span></button>
+        <div class="accordion-content hidden">
+          <label>Nature</label>
+          <div id="natureList" class="check-list compact"></div>
+          <label>Format</label>
+          <div id="formatList" class="check-list compact"></div>
+          <label>Exportation</label>
+          <div id="exportList" class="check-list compact"></div>
+        </div>
+      </div>
+
+      <button id="resetBtn">Réinitialiser les filtres</button>
+    </aside>
+
+    <section class="content">
+      <div class="toolbar">
+        <div>
+          <h2>Liste des datasets</h2>
+          <span id="resultText"></span>
+        </div>
+        <select id="datasetSort">
+          <option value="modified">Last modified</option>
+          <option value="az">A-Z</option>
+          <option value="za">Z-A</option>
+        </select>
+      </div>
+      <div id="andResults" class="and-results hidden">
+        <div class="and-head">
+          <div>
+            <h3>Intersection des mots-clés sélectionnés</h3>
+            <p>Datasets qui contiennent tous les mots-clés sélectionnés en même temps.</p>
+          </div>
+          <span id="andCount"></span>
+        </div>
+        <div id="andGrid" class="grid mini-grid"></div>
+      </div>
+
+      <div id="datasetGrid" class="grid"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button id="closeModal" class="close">×</button>
+      <p id="modalTheme" class="badge"></p>
+      <h2 id="modalTitle"></h2>
+      <p id="modalDescription"></p>
+      <div class="details main-details">
+        <p><b>Nature :</b> <span id="modalNature"></span></p>
+        <p><b>Format :</b> <span id="modalFormat"></span></p>
+        <p><b>Exportation :</b> <span id="modalExport"></span></p>
+        <p><b>Publisher :</b> <span id="modalSource"></span></p>
+        <p><b>Territoire :</b> <span id="modalGeo"></span></p>
+        <p><b>Géolocalisation / géométrie :</b> <span id="modalGeometry"></span></p>
+        <p><b>Période couverte :</b> <span id="modalPeriode"></span></p>
+      </div>
+
+      <button id="modalMoreToggle" class="modal-more-toggle" type="button" aria-expanded="false">
+        <span>Afficher tous les détails de la fiche</span>
+        <strong>▾</strong>
+      </button>
+
+      <div id="modalExtraDetails" class="extra-details hidden">
+        <div class="details">
+          <p><b>Date début :</b> <span id="modalDateDebut"></span></p>
+          <p><b>Date fin :</b> <span id="modalDateFin"></span></p>
+          <p><b>Dernière MAJ :</b> <span id="modalModified"></span></p>
+          <p><b>Fréquence :</b> <span id="modalFrequence"></span></p>
+          <p><b>Granularité temporelle :</b> <span id="modalGranularite"></span></p>
+          <p><b>Données en temps réel :</b> <span id="modalTempsReel"></span></p>
+          <p><b>URL :</b> <span id="modalUrl"></span></p>
+          <p><b>Usage dans le jumeau :</b> <span id="modalUse"></span></p>
+          <p><b>Tags :</b> <span id="modalTags"></span></p>
+        </div>
+
+        <section class="attribute-wrapper">
+          <h3>Attributs du jeu de données</h3>
+          <div id="modalAttributs" class="attribute-groups"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="sample-data.js?v=5"></script>
+  <script src="script.js?v=6"></script>
+</body>
+</html>
