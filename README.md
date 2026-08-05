@@ -371,8 +371,6 @@ Le projet est organisé selon l'architecture standard d'une application **Flask*
 │   └── filter_recensement_population.py
 │
 ├── data/
-│   ├── espaces-verts.geojson
-│   ├── zones-de-rencontre.geojson
 │   ├── metadonnees_datasets.xlsx
 │   ├── iris.gpkg
 │   ├── BDT_3-5_GPKG_LAMB93_D031-ED2025-12-15.gpkg
