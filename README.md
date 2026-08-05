@@ -372,11 +372,11 @@ Le projet est organisé selon l'architecture standard d'une application **Flask*
 │
 ├── data/
 │   ├── metadonnees_datasets.xlsx
-│   ├── iris.gpkg
-│   ├── BDT_3-5_GPKG_LAMB93_D031-ED2025-12-15.gpkg
-│   ├── recensement_2020_toulouse_metropole.csv
-│   ├── recensement_2021_toulouse_metropole.csv
-│   ├── recensement_2022_toulouse_metropole.csv
+│   ├── iris.gpkg    (à télécharger)
+│   ├── BDT_3-5_GPKG_LAMB93_D031-ED2025-12-15.gpkg   (à télécharger)
+│   ├── recensement_2020_toulouse_metropole.csv     (à télécharger)
+│   ├── recensement_2021_toulouse_metropole.csv     (à télécharger)
+│   ├── recensement_2022_toulouse_metropole.csv     (à télécharger)
 │   └── cache/
 │
 ├── history/
@@ -535,7 +535,53 @@ Contient les pages HTML rendues dynamiquement par Flask.
 
 ---
 
-# 🚀 Installation
+# 📦 Jeux de données volumineux
+
+Afin de conserver un dépôt GitHub léger et facilement téléchargeable, certains fichiers de données volumineux ne sont **pas inclus** dans ce dépôt.
+
+Les principaux fichiers concernés sont :
+
+| Fichier | Description |
+|---------|-------------|
+| `iris.gpkg` | Contours géographiques des IRIS utilisés pour les analyses spatiales. |
+| `BDT_3-5_GPKG_LAMB93_D031-ED2025-12-15.gpkg` | Base de données géographiques BD TOPO (IGN) contenant notamment les bâtiments, routes et réseaux. |
+| `base-ic-evol-struct-pop-2020.csv` | Données de recensement de la population (INSEE - 2020). |
+| `base-ic-evol-struct-pop-2021.csv` | Données de recensement de la population (INSEE - 2021). |
+| `base-ic-evol-struct-pop-2022.csv` | Données de recensement de la population (INSEE - 2022). |
+| `data/cache/` | Cache généré automatiquement par l'application afin d'optimiser les temps de chargement des traitements sur les fichiers volumineux. |
+
+Ces fichiers ont été volontairement exclus du dépôt GitHub en raison de leur taille importante, qui dépasserait les limites recommandées pour un dépôt Git.
+
+Ils peuvent être téléchargés directement depuis leurs sources officielles :
+
+- **IGN** pour la BD TOPO ;
+- **INSEE** pour les données de recensement de la population ;
+- **Open Data Toulouse Métropole** pour les jeux de données diffusés via API ou téléchargement.
+
+Une fois téléchargés, il suffit de les placer dans le dossier `data/` en conservant la même arborescence que celle utilisée par le projet.
+
+---
+
+## Génération des fichiers de recensement
+
+Les fichiers de recensement utilisés par l'application ne sont pas directement fournis dans ce dépôt.
+
+Après avoir téléchargé les fichiers bruts de l'INSEE :
+
+- base-ic-evol-struct-pop-2020.csv
+- base-ic-evol-struct-pop-2021.csv
+- base-ic-evol-struct-pop-2022.csv
+
+et les avoir placés dans le dossier `data/`, il suffit d'exécuter :
+
+```bash
+python scripts/filter_recensement_population.py
+```
+
+---
+
+
+## 🚀 Installation
 
 Cloner le dépôt
 
